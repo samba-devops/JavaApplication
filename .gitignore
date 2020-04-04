@@ -1,3 +1,7 @@
+pkg
 target
-simple-jar*.jar
-simple-war*.war
+*.class
+.ufo/current
+.ufo/data
+.ufo/log
+.ufo/output

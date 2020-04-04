@@ -1,23 +1,88 @@
-java-war-deploy-example
-=======================
-An example Java application that deploys an already-existing WAR file.
+# Demo Java Web App
 
-Background
-----------
-This is an extension of the [Java Tomcat example](https://github.com/daticahealth/java-tomcat-maven-example) with a few minor tweaks to show how to work with WAR and JAR files that require customized build processes which do not fit nicely into the [buildpack model](https://resources.datica.com/compliant-cloud/articles/buildpacks/).
+Simple java project demos how to build a war file to be deployed on a Tomcat server.
 
-The `simple-jar` and `simple-war` directories under `source-projects` are included here to show the (simplistic) source of the artifacts used by default in this demo. You can safely ignore them; the deployment method used here does _not_ require you to keep the source code of your application in a Git repository.
+## Build
 
-If you haven't already read Datica's [Java + Maven Guide](https://resources.datica.com/compliant-cloud/articles/guides/java-maven-tomcat/) please check it out. Also, the [Heroku Java documentation](https://devcenter.heroku.com/categories/java) and [Heroku Java Buildpack project](https://github.com/heroku/heroku-buildpack-java) and are also good references which are mostly relevant when running Java applications on Datica.
+The build script uses `mvn package` to produce a demo.war file and then bundles it with a Docker image that runs Tomcat.  Usage:
 
-Getting Started
----------------
-1. Clone this repository.
-2. Customize the `.datica/post-build` script to pull down your pre-built software artifacts. We recommend using S3 in conjunction with access keys credentials if you need to protect those artifacts from public access.
-3. Update the `Procfile` command as appropriate. By default it uses the [webapp runner](https://github.com/jsimone/webapp-runner) to start up a Tomcat instance for serving up a WAR file.
-4. Commit your customizations to your local Git repository.
-5. Use the [datica git-remote add](https://resources.datica.com/compliant-cloud/cli-reference/#git-remote) command to associate your customized repo to a service in your Datica environment.
-6. Push your modified branch to your service using the `git` command (usually `git push datica master`).
-7. Grab some coffee while your build finishes and your new application is deployed for you automatically.
+    bin/build
 
-As always, feel free to reach out to [Datica's support team](https://datica.com/support/) if you run into any trouble.
+## What happened
+
+* mvn package was ran and the `target/demo.war` was moved into `pkg/demo.war`
+* a docker image was built which copied the `pkg/demo.war` to `/usr/local/tomcat/webapps/demo.war`. Check out the [Dockerfile](Dockerfile) for details.
+
+Here's an example of some things to check after running the build script:
+
+    $ ls pkg/demo.war
+    pkg/demo.war
+    $ docker images
+    REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+    demo-java           latest              88092dfb7325        6 minutes ago       591MB
+    tomcat              8.5                 a92c139758db        2 weeks ago         558MB
+    $
+
+## Source Url Mapping
+
+The app is a small demo of a java servlet app.  Here's the source code to url mapping:
+
+Source | Url
+--- | ---
+src/main/java/Hello.java | localhost:8080/demo/Hello
+src/main/webapp/index.jsp | localhost:8080/demo/index.jsp
+
+## Run
+
+Here are the summarized commands to run and test that Tomcat is serving the war file:
+
+    docker run --rm -p 8080:8080 -d demo-java
+    docker exec -ti $(docker ps -ql) bash
+    curl localhost:8080/demo/Hello
+    curl localhost:8080/demo/index.jsp
+    exit
+    docker stop $(docker ps -ql)
+
+Then you can hit the the [HOSTNAME]:8080/demo/Hello and to verify that Tomcat is servering the demo.war file.  You should see an html page that says "Hello World".  The output should look similar:
+
+    $ docker run --rm -p 8080:8080 -d demo-java
+    2ba7323481fa5c4068b90f2edf38555d9551303e9c2e4c27137ab0545688555b
+    $ docker exec -ti $(docker ps -ql) bash
+    root@2ba7323481fa:/usr/local/tomcat# curl localhost:8080/demo/Hello
+    <h1>Hello World Hello.java</h1>
+    root@2ba7323481fa:/usr/local/tomcat# curl localhost:8080/demo/index.jsp
+    <html>
+    <body>
+    <h2>Hello World index.jsp!</h2>
+    </body>
+    </html>
+    root@2ba7323481fa:/usr/local/tomcat# exit
+    exit
+    $ docker stop $(docker ps -ql)
+    2ba7323481fa
+    $ docker ps -a
+    CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+    $
+
+## Usage with UFO
+
+The ufo branch of this project provides an additional demo that takes the war artifact, builds a Docker image and deploys it to ECS.  For details please check out that branch: [ufo](https://github.com/tongueroo/demo-java/tree/ufo). For more details on ufo check out the [official ufo docs](http://ufoships.com/).
+
+## Initial Generation
+
+Here are some notes on the initial generation of the project. The initial files and project structure was generated with the `mvn archetype:generate` command.  Note, you do not have to run the command it is just noted here for posterity.  More info: [Creating a webapp](https://maven.apache.org/plugins-archives/maven-archetype-plugin-1.0-alpha-7/examples/webapp.html) and [Introduction to the Standard Directory Layout](https://maven.apache.org/guides/introduction/introduction-to-the-standard-directory-layout.html).
+
+Change were made like adding a simple [Hello.java](src/main/java/Hello.java) Serlvet class.
+
+The original command was:
+
+    mvn archetype:generate \
+      -DinteractiveMode=false \
+      -DgroupId=com.domain \
+      -DartifactId=demo \
+      -DarchetypeArtifactId=maven-archetype-webapp
+
+## Dependencies
+
+* docker: `brew install docker`
+* maven: `brew install maven`
